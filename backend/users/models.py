@@ -1,5 +1,12 @@
+from datetime import timedelta
+
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.utils import timezone
+
+
+def _default_reset_expires_at():
+    return timezone.now() + timedelta(minutes=30)
 
 class User(AbstractUser):
     class Role(models.TextChoices):
@@ -64,3 +71,30 @@ class ClientProfile(models.Model):
 
     def __str__(self):
         return f"Client: {self.user.get_full_name()}"
+
+
+class PasswordResetCode(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reset_codes')
+    code = models.CharField(max_length=6, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(default=_default_reset_expires_at)
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'used_at']),
+        ]
+
+    def is_expired(self):
+        return timezone.now() >= self.expires_at
+
+    def is_active(self):
+        return self.used_at is None and not self.is_expired()
+
+    def mark_used(self):
+        self.used_at = timezone.now()
+        self.save(update_fields=['used_at'])
+
+    def __str__(self):
+        return f"ResetCode user={self.user_id} expires_at={self.expires_at:%Y-%m-%d %H:%M}"

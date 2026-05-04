@@ -12,6 +12,12 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+
   backend:
     build: ./backend
     command: python manage.py runserver 0.0.0.0:8000
@@ -23,8 +29,14 @@ services:
       - DATABASE_URL=postgresql://fitness_user:fitness_pass@db:5432/fitness_db
       - SECRET_KEY=super-secret-key-za-development
       - DEBUG=True
+      - EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+      - EMAIL_HOST=mailhog
+      - EMAIL_PORT=1025
+      - EMAIL_USE_TLS=False
+      - DEFAULT_FROM_EMAIL=noreply@likeapro.local
     depends_on:
       - db
+      - mailhog
 
   frontend:
     build: ./frontend

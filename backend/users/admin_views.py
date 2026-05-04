@@ -3,12 +3,15 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 
-from .models import TrainerProfile
+from .models import TrainerProfile, User
 from .permissions import IsAdmin
 from .serializers import (
+    AdminCreateTrainerSerializer,
+    AdminUserSerializer,
     TrainerListSerializer,
     TrainerDetailSerializer,
     TrainerRejectSerializer,
+    UserSerializer,
 )
 
 
@@ -18,7 +21,8 @@ class AdminTrainerPagination(PageNumberPagination):
     max_page_size = 100
 
 
-class AdminTrainerViewSet(mixins.ListModelMixin,
+class AdminTrainerViewSet(mixins.CreateModelMixin,
+                          mixins.ListModelMixin,
                           mixins.RetrieveModelMixin,
                           mixins.DestroyModelMixin,
                           viewsets.GenericViewSet):
@@ -48,7 +52,20 @@ class AdminTrainerViewSet(mixins.ListModelMixin,
     def get_serializer_class(self):
         if self.action == 'list':
             return TrainerListSerializer
+        if self.action == 'create':
+            return AdminCreateTrainerSerializer
         return TrainerDetailSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        # Return the full trainer-detail shape so the frontend can refresh in place.
+        profile = user.trainer_profile
+        return Response(
+            TrainerDetailSerializer(profile).data,
+            status=status.HTTP_201_CREATED,
+        )
 
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
@@ -84,3 +101,51 @@ class AdminTrainerViewSet(mixins.ListModelMixin,
         trainer.status = TrainerProfile.Status.REMOVED
         trainer.save(update_fields=['is_deleted', 'status'])
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class AdminUserViewSet(mixins.ListModelMixin,
+                       mixins.RetrieveModelMixin,
+                       mixins.DestroyModelMixin,
+                       viewsets.GenericViewSet):
+    permission_classes = [IsAdmin]
+    serializer_class = AdminUserSerializer
+    pagination_class = AdminTrainerPagination
+
+    def destroy(self, request, *args, **kwargs):
+        """Logical delete: flip is_deleted + is_active. Self-delete is forbidden."""
+        target = self.get_object()
+        if target.pk == request.user.pk:
+            return Response(
+                {'detail': "You can't delete your own account."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if target.is_deleted:
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        target.is_deleted = True
+        target.is_active = False
+        target.save(update_fields=['is_deleted', 'is_active'])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def get_queryset(self):
+        qs = User.objects.all()
+
+        include_deleted = self.request.query_params.get('include_deleted', '').lower() == 'true'
+        if not include_deleted:
+            qs = qs.filter(is_deleted=False)
+
+        role = (self.request.query_params.get('role') or '').lower()
+        valid = {r.value for r in User.Role}
+        if role and role in valid:
+            qs = qs.filter(role=role)
+
+        search = self.request.query_params.get('search')
+        if search:
+            from django.db.models import Q
+            qs = qs.filter(
+                Q(username__icontains=search)
+                | Q(email__icontains=search)
+                | Q(first_name__icontains=search)
+                | Q(last_name__icontains=search)
+            )
+
+        return qs.order_by('username')

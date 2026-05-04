@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
 import './LandingPage.css';
@@ -24,7 +24,8 @@ export default function LandingPage() {
   });
   const [trainerData, setTrainerData] = useState({
     username: '', email: '', first_name: '', last_name: '',
-    password: '', password2: '', license_number: '', specialty: '', biography: ''
+    password: '', password2: '', license_number: '', specialty: '', biography: '',
+    date_of_birth: '', gender: '',
   });
 
   const resetMessages = () => {
@@ -54,8 +55,30 @@ export default function LandingPage() {
     if (data.password !== data.password2) {
       errs.password2 = 'Passwords do not match.';
     }
-    if (role === 'trainer' && !data.license_number.trim()) {
-      errs.license_number = 'License number is required.';
+    if (role === 'trainer') {
+      if (!data.license_number.trim()) {
+        errs.license_number = 'License number is required.';
+      }
+      if (!data.gender) {
+        errs.gender = 'Please select a gender.';
+      }
+      if (!data.biography || data.biography.trim().length < 20) {
+        errs.biography = 'Biography must be at least 20 characters.';
+      }
+      if (!data.date_of_birth) {
+        errs.date_of_birth = 'Date of birth is required.';
+      } else {
+        const dob = new Date(data.date_of_birth);
+        const today = new Date();
+        if (Number.isNaN(dob.getTime()) || dob > today) {
+          errs.date_of_birth = 'Enter a valid date of birth.';
+        } else {
+          let age = today.getFullYear() - dob.getFullYear();
+          const m = today.getMonth() - dob.getMonth();
+          if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
+          if (age < 21) errs.date_of_birth = 'Trainer must be at least 21 years old.';
+        }
+      }
     }
     return errs;
   };
@@ -120,7 +143,8 @@ export default function LandingPage() {
     setClientData({ username: '', email: '', first_name: '', last_name: '', password: '', password2: '' });
     setTrainerData({
       username: '', email: '', first_name: '', last_name: '',
-      password: '', password2: '', license_number: '', specialty: '', biography: ''
+      password: '', password2: '', license_number: '', specialty: '', biography: '',
+      date_of_birth: '', gender: '',
     });
   };
 
@@ -197,6 +221,7 @@ export default function LandingPage() {
               <button type="submit" className="btn-primary" disabled={loading}>
                 {loading ? 'Logging in...' : 'Login'}
               </button>
+              <Link to="/reset-password" className="forgot-link">Forgot password?</Link>
             </form>
           )}
 
@@ -312,6 +337,38 @@ export default function LandingPage() {
                     <input type="text" placeholder="e.g. Strength & Conditioning"
                       value={trainerData.specialty}
                       onChange={e => setTrainerData({ ...trainerData, specialty: e.target.value })} />
+                  </div>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Date of birth</label>
+                      <input type="date" max={new Date().toISOString().slice(0, 10)}
+                        value={trainerData.date_of_birth}
+                        onChange={e => setTrainerData({ ...trainerData, date_of_birth: e.target.value })} />
+                      {renderError('date_of_birth')}
+                    </div>
+                    <div className="form-group">
+                      <label>Gender</label>
+                      <select
+                        value={trainerData.gender}
+                        onChange={e => setTrainerData({ ...trainerData, gender: e.target.value })}
+                      >
+                        <option value="">Select…</option>
+                        <option value="M">Male</option>
+                        <option value="F">Female</option>
+                        <option value="O">Other</option>
+                      </select>
+                      {renderError('gender')}
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label>Biography</label>
+                    <textarea
+                      rows={3}
+                      placeholder="Tell us about your coaching experience (20+ characters)"
+                      value={trainerData.biography}
+                      onChange={e => setTrainerData({ ...trainerData, biography: e.target.value })}
+                    />
+                    {renderError('biography')}
                   </div>
                   <div className="form-group">
                     <label>Password</label>

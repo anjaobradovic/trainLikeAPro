@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
 import TrainerDetailModal from './TrainerDetailModal';
+import CreateTrainerModal from './CreateTrainerModal';
 
 const TABS = [
   { key: 'PENDING', label: 'Pending' },
@@ -24,6 +25,7 @@ export default function AdminTrainers() {
   const [data, setData] = useState({ results: [], count: 0, next: null, previous: null });
   const [loading, setLoading] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
+  const [creating, setCreating] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -71,19 +73,24 @@ export default function AdminTrainers() {
             </button>
           ))}
         </div>
-        <div className="admin-sort">
-          <span className="admin-sort-label">Sort by:</span>
-          <button
-            className={`admin-sort-btn ${sort === 'name' ? 'active' : ''}`}
-            onClick={() => handleSort('name')}
-          >
-            Name
-          </button>
-          <button
-            className={`admin-sort-btn ${sort === 'rating' ? 'active' : ''}`}
-            onClick={() => handleSort('rating')}
-          >
-            Rating
+        <div className="admin-toolbar-right">
+          <div className="admin-sort">
+            <span className="admin-sort-label">Sort by:</span>
+            <button
+              className={`admin-sort-btn ${sort === 'name' ? 'active' : ''}`}
+              onClick={() => handleSort('name')}
+            >
+              Name
+            </button>
+            <button
+              className={`admin-sort-btn ${sort === 'rating' ? 'active' : ''}`}
+              onClick={() => handleSort('rating')}
+            >
+              Rating
+            </button>
+          </div>
+          <button className="btn-success" onClick={() => setCreating(true)}>
+            + Add trainer
           </button>
         </div>
       </div>
@@ -150,6 +157,19 @@ export default function AdminTrainers() {
           trainerId={selectedId}
           onClose={() => setSelectedId(null)}
           onChanged={() => { setSelectedId(null); load(); }}
+        />
+      )}
+
+      {creating && (
+        <CreateTrainerModal
+          onClose={() => setCreating(false)}
+          onCreated={() => {
+            setCreating(false);
+            toast.success('Trainer created and approved.');
+            setStatusTab('APPROVED');
+            setPage(1);
+            load();
+          }}
         />
       )}
     </div>

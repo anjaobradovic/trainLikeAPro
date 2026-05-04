@@ -22,6 +22,9 @@ export default function AdminLayout() {
           <NavLink to="/admin" end className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}>
             Dashboard
           </NavLink>
+          <NavLink to="/admin/users" className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}>
+            All Users
+          </NavLink>
           <NavLink to="/admin/trainers" className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}>
             Trainers
           </NavLink>
