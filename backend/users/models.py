@@ -15,12 +15,28 @@ class User(AbstractUser):
 
 
 class TrainerProfile(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'Pending'
+        APPROVED = 'APPROVED', 'Approved'
+        REJECTED = 'REJECTED', 'Rejected'
+        REMOVED = 'REMOVED', 'Removed'
+
+    class Gender(models.TextChoices):
+        MALE = 'M', 'Male'
+        FEMALE = 'F', 'Female'
+        OTHER = 'O', 'Other'
+
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='trainer_profile')
     biography = models.TextField(blank=True)
     specialty = models.CharField(max_length=200, blank=True)
     license_number = models.CharField(max_length=100)
+    qualifications = models.TextField(blank=True)
+    date_of_birth = models.DateField(null=True, blank=True)
+    gender = models.CharField(max_length=1, choices=Gender.choices, blank=True)
     average_rating = models.FloatField(default=0.0)
-    is_approved = models.BooleanField(default=False)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    rejection_reason = models.TextField(blank=True)
+    is_deleted = models.BooleanField(default=False)
 
     def __str__(self):
         return f"Trainer: {self.user.get_full_name()}"

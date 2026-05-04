@@ -85,7 +85,7 @@ REST_FRAMEWORK = {
 
 # CORS — dozvoli React-u da poziva API
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
+    "http://localhost:3030",
 ]
 
 LANGUAGE_CODE = 'en-us'

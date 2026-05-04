@@ -1,13 +1,28 @@
 import { useAuth } from '../context/AuthContext';
 
 export default function TrainerDashboard() {
-  const { user, logout } = useAuth();
+  const { logout } = useAuth();
   return (
-    <div style={{ padding: '2rem', color: '#fff' }}>
-      <h1 style={{ color: '#ff6b00' }}>Trainer Dashboard</h1>
-      <p>Welcome, {user?.username}!</p>
-      <button onClick={logout} style={{ marginTop: '1rem', padding: '0.5rem 1rem',
-        background: '#ff6b00', border: 'none', color: '#fff', borderRadius: '8px', cursor: '    pointer' }}>
+    <div style={{
+      minHeight: '100vh',
+      background: '#0a0a0a',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '1.5rem',
+      color: '#fff',
+    }}>
+      <h1 style={{ color: '#ff6b00', fontSize: '3rem', margin: 0 }}>Hello Trainer</h1>
+      <button onClick={logout} style={{
+        padding: '0.7rem 1.5rem',
+        background: '#ff6b00',
+        border: 'none',
+        color: '#fff',
+        borderRadius: '8px',
+        cursor: 'pointer',
+        fontWeight: 600,
+      }}>
         Logout
       </button>
     </div>

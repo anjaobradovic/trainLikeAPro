@@ -1,9 +1,12 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ToastProvider } from './context/ToastContext';
 import LandingPage from './pages/LandingPage';
-import AdminDashboard from './pages/AdminDashboard';
 import TrainerDashboard from './pages/TrainerDashboard';
 import ClientDashboard from './pages/ClientDashboard';
+import AdminLayout from './pages/admin/AdminLayout';
+import AdminHome from './pages/admin/AdminHome';
+import AdminTrainers from './pages/admin/AdminTrainers';
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, loading } = useAuth();
@@ -22,9 +25,12 @@ const AppRoutes = () => {
       <Route path="/" element={user ? <Navigate to={`/${user.role}`} /> : <LandingPage />} />
       <Route path="/admin" element={
         <ProtectedRoute allowedRoles={['admin']}>
-          <AdminDashboard />
+          <AdminLayout />
         </ProtectedRoute>
-      } />
+      }>
+        <Route index element={<AdminHome />} />
+        <Route path="trainers" element={<AdminTrainers />} />
+      </Route>
       <Route path="/trainer" element={
         <ProtectedRoute allowedRoles={['trainer']}>
           <TrainerDashboard />
@@ -42,9 +48,11 @@ const AppRoutes = () => {
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
+      <ToastProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </ToastProvider>
     </AuthProvider>
   );
 }

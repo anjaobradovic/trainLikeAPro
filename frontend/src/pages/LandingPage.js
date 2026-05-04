@@ -4,12 +4,17 @@ import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
 import './LandingPage.css';
 
+const USERNAME_RE = /^[A-Za-z0-9_.@+-]{3,150}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const NAME_RE = /^[A-Za-zÀ-ž' -]{2,50}$/;
+
 export default function LandingPage() {
   const [activeTab, setActiveTab] = useState('login');
   const [registerRole, setRegisterRole] = useState('client');
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -22,12 +27,52 @@ export default function LandingPage() {
     password: '', password2: '', license_number: '', specialty: '', biography: ''
   });
 
+  const resetMessages = () => {
+    setError('');
+    setFieldErrors({});
+  };
+
+  const validateRegister = (data, role) => {
+    const errs = {};
+    if (!NAME_RE.test(data.first_name.trim())) {
+      errs.first_name = 'First name must be 2–50 letters.';
+    }
+    if (!NAME_RE.test(data.last_name.trim())) {
+      errs.last_name = 'Last name must be 2–50 letters.';
+    }
+    if (!USERNAME_RE.test(data.username.trim())) {
+      errs.username = 'Username must be 3+ chars (letters, digits, _.@+-).';
+    }
+    if (!EMAIL_RE.test(data.email.trim())) {
+      errs.email = 'Enter a valid email address.';
+    }
+    if (!data.password || data.password.length < 6) {
+      errs.password = 'Password must be at least 6 characters.';
+    } else if (!/[A-Za-z]/.test(data.password) || !/[0-9]/.test(data.password)) {
+      errs.password = 'Password must contain letters and numbers.';
+    }
+    if (data.password !== data.password2) {
+      errs.password2 = 'Passwords do not match.';
+    }
+    if (role === 'trainer' && !data.license_number.trim()) {
+      errs.license_number = 'License number is required.';
+    }
+    return errs;
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
-    setError('');
+    resetMessages();
+    const errs = {};
+    if (!loginData.username.trim()) errs.username = 'Username is required.';
+    if (!loginData.password) errs.password = 'Password is required.';
+    if (Object.keys(errs).length) {
+      setFieldErrors(errs);
+      return;
+    }
     setLoading(true);
     try {
-      const role = await login(loginData.username, loginData.password);
+      const role = await login(loginData.username.trim(), loginData.password);
       navigate(`/${role}`);
     } catch {
       setError('Invalid username or password.');
@@ -38,33 +83,49 @@ export default function LandingPage() {
 
   const handleRegister = async (e) => {
     e.preventDefault();
-    setError('');
-    setSuccess('');
+    resetMessages();
+    const data = registerRole === 'client' ? clientData : trainerData;
+    const errs = validateRegister(data, registerRole);
+    if (Object.keys(errs).length) {
+      setFieldErrors(errs);
+      return;
+    }
     setLoading(true);
     try {
-      const data = registerRole === 'client' ? clientData : trainerData;
       const endpoint = registerRole === 'client'
         ? '/users/register/client/'
         : '/users/register/trainer/';
       await api.post(endpoint, data);
-      setSuccess(
-        registerRole === 'trainer'
-          ? 'Registration successful! Wait for admin approval.'
-          : 'Registration successful! You can now log in.'
-      );
-      setActiveTab('login');
+      setShowSuccess(true);
     } catch (err) {
-      const data = err.response?.data;
-      if (data) {
-        const msgs = Object.values(data).flat().join(' ');
-        setError(msgs);
+      const respData = err.response?.data;
+      if (respData && typeof respData === 'object') {
+        const apiFieldErrs = {};
+        Object.entries(respData).forEach(([key, val]) => {
+          apiFieldErrs[key] = Array.isArray(val) ? val.join(' ') : String(val);
+        });
+        setFieldErrors(apiFieldErrs);
+        setError('Please fix the errors below.');
       } else {
-        setError('Something went wrong.');
+        setError('Something went wrong. Please try again.');
       }
     } finally {
       setLoading(false);
     }
   };
+
+  const handleSuccessClose = () => {
+    setShowSuccess(false);
+    setActiveTab('login');
+    setClientData({ username: '', email: '', first_name: '', last_name: '', password: '', password2: '' });
+    setTrainerData({
+      username: '', email: '', first_name: '', last_name: '',
+      password: '', password2: '', license_number: '', specialty: '', biography: ''
+    });
+  };
+
+  const renderError = (field) =>
+    fieldErrors[field] ? <span className="field-error">{fieldErrors[field]}</span> : null;
 
   return (
     <div className="landing">
@@ -97,23 +158,22 @@ export default function LandingPage() {
           <div className="tabs">
             <button
               className={`tab ${activeTab === 'login' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('login'); setError(''); setSuccess(''); }}
+              onClick={() => { setActiveTab('login'); resetMessages(); }}
             >
               Login
             </button>
             <button
               className={`tab ${activeTab === 'register' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('register'); setError(''); setSuccess(''); }}
+              onClick={() => { setActiveTab('register'); resetMessages(); }}
             >
               Register
             </button>
           </div>
 
           {error && <div className="alert alert-error">{error}</div>}
-          {success && <div className="alert alert-success">{success}</div>}
 
           {activeTab === 'login' && (
-            <form onSubmit={handleLogin} className="form">
+            <form onSubmit={handleLogin} className="form" noValidate>
               <div className="form-group">
                 <label>Username</label>
                 <input
@@ -121,8 +181,8 @@ export default function LandingPage() {
                   placeholder="Enter your username"
                   value={loginData.username}
                   onChange={e => setLoginData({ ...loginData, username: e.target.value })}
-                  required
                 />
+                {renderError('username')}
               </div>
               <div className="form-group">
                 <label>Password</label>
@@ -131,8 +191,8 @@ export default function LandingPage() {
                   placeholder="Enter your password"
                   value={loginData.password}
                   onChange={e => setLoginData({ ...loginData, password: e.target.value })}
-                  required
                 />
+                {renderError('password')}
               </div>
               <button type="submit" className="btn-primary" disabled={loading}>
                 {loading ? 'Logging in...' : 'Login'}
@@ -141,19 +201,19 @@ export default function LandingPage() {
           )}
 
           {activeTab === 'register' && (
-            <form onSubmit={handleRegister} className="form">
+            <form onSubmit={handleRegister} className="form" noValidate>
               <div className="role-selector">
                 <button
                   type="button"
                   className={`role-btn ${registerRole === 'client' ? 'active' : ''}`}
-                  onClick={() => setRegisterRole('client')}
+                  onClick={() => { setRegisterRole('client'); resetMessages(); }}
                 >
                   I'm a Client
                 </button>
                 <button
                   type="button"
                   className={`role-btn ${registerRole === 'trainer' ? 'active' : ''}`}
-                  onClick={() => setRegisterRole('trainer')}
+                  onClick={() => { setRegisterRole('trainer'); resetMessages(); }}
                 >
                   I'm a Trainer
                 </button>
@@ -166,44 +226,44 @@ export default function LandingPage() {
                       <label>First Name</label>
                       <input type="text" placeholder="First name"
                         value={clientData.first_name}
-                        onChange={e => setClientData({ ...clientData, first_name: e.target.value })}
-                        required />
+                        onChange={e => setClientData({ ...clientData, first_name: e.target.value })} />
+                      {renderError('first_name')}
                     </div>
                     <div className="form-group">
                       <label>Last Name</label>
                       <input type="text" placeholder="Last name"
                         value={clientData.last_name}
-                        onChange={e => setClientData({ ...clientData, last_name: e.target.value })}
-                        required />
+                        onChange={e => setClientData({ ...clientData, last_name: e.target.value })} />
+                      {renderError('last_name')}
                     </div>
                   </div>
                   <div className="form-group">
                     <label>Username</label>
                     <input type="text" placeholder="Choose a username"
                       value={clientData.username}
-                      onChange={e => setClientData({ ...clientData, username: e.target.value })}
-                      required />
+                      onChange={e => setClientData({ ...clientData, username: e.target.value })} />
+                    {renderError('username')}
                   </div>
                   <div className="form-group">
                     <label>Email</label>
                     <input type="email" placeholder="your@email.com"
                       value={clientData.email}
-                      onChange={e => setClientData({ ...clientData, email: e.target.value })}
-                      required />
+                      onChange={e => setClientData({ ...clientData, email: e.target.value })} />
+                    {renderError('email')}
                   </div>
                   <div className="form-group">
                     <label>Password</label>
-                    <input type="password" placeholder="Create a password"
+                    <input type="password" placeholder="Create a password (6+ chars, letters & numbers)"
                       value={clientData.password}
-                      onChange={e => setClientData({ ...clientData, password: e.target.value })}
-                      required />
+                      onChange={e => setClientData({ ...clientData, password: e.target.value })} />
+                    {renderError('password')}
                   </div>
                   <div className="form-group">
                     <label>Confirm Password</label>
                     <input type="password" placeholder="Repeat your password"
                       value={clientData.password2}
-                      onChange={e => setClientData({ ...clientData, password2: e.target.value })}
-                      required />
+                      onChange={e => setClientData({ ...clientData, password2: e.target.value })} />
+                    {renderError('password2')}
                   </div>
                 </>
               )}
@@ -215,37 +275,37 @@ export default function LandingPage() {
                       <label>First Name</label>
                       <input type="text" placeholder="First name"
                         value={trainerData.first_name}
-                        onChange={e => setTrainerData({ ...trainerData, first_name: e.target.value })}
-                        required />
+                        onChange={e => setTrainerData({ ...trainerData, first_name: e.target.value })} />
+                      {renderError('first_name')}
                     </div>
                     <div className="form-group">
                       <label>Last Name</label>
                       <input type="text" placeholder="Last name"
                         value={trainerData.last_name}
-                        onChange={e => setTrainerData({ ...trainerData, last_name: e.target.value })}
-                        required />
+                        onChange={e => setTrainerData({ ...trainerData, last_name: e.target.value })} />
+                      {renderError('last_name')}
                     </div>
                   </div>
                   <div className="form-group">
                     <label>Username</label>
                     <input type="text" placeholder="Choose a username"
                       value={trainerData.username}
-                      onChange={e => setTrainerData({ ...trainerData, username: e.target.value })}
-                      required />
+                      onChange={e => setTrainerData({ ...trainerData, username: e.target.value })} />
+                    {renderError('username')}
                   </div>
                   <div className="form-group">
                     <label>Email</label>
                     <input type="email" placeholder="your@email.com"
                       value={trainerData.email}
-                      onChange={e => setTrainerData({ ...trainerData, email: e.target.value })}
-                      required />
+                      onChange={e => setTrainerData({ ...trainerData, email: e.target.value })} />
+                    {renderError('email')}
                   </div>
                   <div className="form-group">
                     <label>License Number</label>
                     <input type="text" placeholder="Your trainer license"
                       value={trainerData.license_number}
-                      onChange={e => setTrainerData({ ...trainerData, license_number: e.target.value })}
-                      required />
+                      onChange={e => setTrainerData({ ...trainerData, license_number: e.target.value })} />
+                    {renderError('license_number')}
                   </div>
                   <div className="form-group">
                     <label>Specialty</label>
@@ -255,17 +315,17 @@ export default function LandingPage() {
                   </div>
                   <div className="form-group">
                     <label>Password</label>
-                    <input type="password" placeholder="Create a password"
+                    <input type="password" placeholder="Create a password (6+ chars, letters & numbers)"
                       value={trainerData.password}
-                      onChange={e => setTrainerData({ ...trainerData, password: e.target.value })}
-                      required />
+                      onChange={e => setTrainerData({ ...trainerData, password: e.target.value })} />
+                    {renderError('password')}
                   </div>
                   <div className="form-group">
                     <label>Confirm Password</label>
                     <input type="password" placeholder="Repeat your password"
                       value={trainerData.password2}
-                      onChange={e => setTrainerData({ ...trainerData, password2: e.target.value })}
-                      required />
+                      onChange={e => setTrainerData({ ...trainerData, password2: e.target.value })} />
+                    {renderError('password2')}
                   </div>
                 </>
               )}
@@ -277,6 +337,19 @@ export default function LandingPage() {
           )}
         </div>
       </div>
+
+      {showSuccess && (
+        <div className="modal-overlay" onClick={handleSuccessClose}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-icon">✓</div>
+            <h2 className="modal-title">Congratulations!</h2>
+            <p className="modal-text">Your account has been created. You can log in now.</p>
+            <button className="btn-primary" onClick={handleSuccessClose}>
+              Continue to Login
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
