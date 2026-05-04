@@ -7,6 +7,8 @@ import ClientDashboard from './pages/ClientDashboard';
 import AdminLayout from './pages/admin/AdminLayout';
 import AdminHome from './pages/admin/AdminHome';
 import AdminTrainers from './pages/admin/AdminTrainers';
+import AdminEquipment from './pages/admin/AdminEquipment';
+import AdminAccessories from './pages/admin/AdminAccessories';
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, loading } = useAuth();
@@ -30,6 +32,8 @@ const AppRoutes = () => {
       }>
         <Route index element={<AdminHome />} />
         <Route path="trainers" element={<AdminTrainers />} />
+        <Route path="equipment" element={<AdminEquipment />} />
+        <Route path="accessories" element={<AdminAccessories />} />
       </Route>
       <Route path="/trainer" element={
         <ProtectedRoute allowedRoles={['trainer']}>

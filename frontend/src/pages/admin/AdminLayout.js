@@ -25,6 +25,12 @@ export default function AdminLayout() {
           <NavLink to="/admin/trainers" className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}>
             Trainers
           </NavLink>
+          <NavLink to="/admin/equipment" className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}>
+            Equipment
+          </NavLink>
+          <NavLink to="/admin/accessories" className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}>
+            Accessories
+          </NavLink>
         </nav>
         <div className="admin-sidebar-footer">
           <div className="admin-user">
