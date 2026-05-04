@@ -69,6 +69,7 @@ class AdminTrainerViewSet(mixins.CreateModelMixin,
 
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
+        from django.utils import timezone
         trainer = self.get_object()
         if trainer.is_deleted:
             return Response(
@@ -77,7 +78,8 @@ class AdminTrainerViewSet(mixins.CreateModelMixin,
             )
         trainer.status = TrainerProfile.Status.APPROVED
         trainer.rejection_reason = ''
-        trainer.save(update_fields=['status', 'rejection_reason'])
+        trainer.approved_at = timezone.now()
+        trainer.save(update_fields=['status', 'rejection_reason', 'approved_at'])
         return Response(TrainerDetailSerializer(trainer).data)
 
     @action(detail=True, methods=['post'])

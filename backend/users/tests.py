@@ -453,3 +453,292 @@ class PasswordResetCodeTests(APITestCase):
         res = self._confirm(email='ghost@nowhere.test', code='123456')
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(res.data['detail'], 'Invalid or expired code.')
+
+
+class AdminStatsTests(APITestCase):
+    """Stats endpoints: overview deltas, renewal detection, timeseries zero-fill."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from datetime import datetime
+        from decimal import Decimal
+        from django.utils import timezone
+        from payments.models import Payment
+
+        cls.admin = User.objects.create_user(
+            username='admin_stats', password='p', role=User.Role.ADMIN,
+            is_staff=True, is_superuser=True,
+        )
+        tz = timezone.get_current_timezone()
+        today = timezone.localdate()
+
+        def make_user(username, role, days_ago):
+            u = User.objects.create_user(username=username, password='p', role=role)
+            joined = timezone.make_aware(datetime.combine(today - timedelta(days=days_ago), timezone.now().time()), tz)
+            User.objects.filter(pk=u.pk).update(date_joined=joined)
+            u.refresh_from_db()
+            return u
+
+        # Current 30d window: 5 new clients, 1 new trainer.
+        for i in range(5):
+            make_user(f'cur_client_{i}', User.Role.CLIENT, days_ago=i + 1)
+        cls.cur_trainer = make_user('cur_trainer', User.Role.TRAINER, days_ago=10)
+
+        # Prior 30d window (days 31-60): 2 clients, 2 trainers.
+        for i in range(2):
+            make_user(f'prev_client_{i}', User.Role.CLIENT, days_ago=35 + i)
+        for i in range(2):
+            make_user(f'prev_trainer_{i}', User.Role.TRAINER, days_ago=40 + i)
+
+        # Older still (>60 days), shouldn't appear in either window.
+        cls.old_client = make_user('old_client', User.Role.CLIENT, days_ago=200)
+
+        # Payments: old_client has a COMPLETED payment 100 days ago (the "first")
+        # and another COMPLETED 5 days ago (in the current window) -> renewal.
+        # cur_client_0 has only one COMPLETED in the current window -> NOT a renewal.
+        trainer_recv = make_user('trainer_recv', User.Role.TRAINER, days_ago=300)
+
+        def make_payment(client, days_ago, status_=Payment.Status.COMPLETED, amount='100.00'):
+            ts = timezone.make_aware(datetime.combine(today - timedelta(days=days_ago), timezone.now().time()), tz)
+            p = Payment.objects.create(
+                client=client, trainer=trainer_recv, amount=Decimal(amount),
+                status=status_,
+                period_start=ts.date(), period_end=ts.date(),
+            )
+            Payment.objects.filter(pk=p.pk).update(created_at=ts)
+            return p
+
+        # Renewal scenario.
+        make_payment(cls.old_client, days_ago=100)
+        make_payment(cls.old_client, days_ago=5)  # renewal in current window
+
+        # First-time payment in the current window — NOT a renewal.
+        first_timer = User.objects.get(username='cur_client_0')
+        make_payment(first_timer, days_ago=3)
+
+        # Prior-window renewal: cur_client_1 had a payment 70 days ago (before
+        # prior window starts, but we don't reach it; we want a renewal in
+        # the prior window). Set up: a client with payment 100 days ago + 45 days ago.
+        prev_renewal_client = User.objects.get(username='prev_client_0')
+        make_payment(prev_renewal_client, days_ago=120)
+        make_payment(prev_renewal_client, days_ago=45)  # in prior window
+
+        # A refund in the current window — for activity feed.
+        ref_client = User.objects.get(username='cur_client_2')
+        ref_pay = make_payment(ref_client, days_ago=20, status_=Payment.Status.REFUNDED)
+        Payment.objects.filter(pk=ref_pay.pk).update(
+            refunded_at=timezone.make_aware(
+                datetime.combine(today - timedelta(days=2), timezone.now().time()), tz)
+        )
+
+        # Approve cur_trainer (creates a trainer-approval activity event).
+        TrainerProfile.objects.create(
+            user=cls.cur_trainer, license_number='L', biography='Bio',
+            status=TrainerProfile.Status.APPROVED,
+            approved_at=timezone.now() - timedelta(days=4),
+        )
+        # Pending approval to count: another trainer waiting.
+        pending_user = make_user('pending_trainer', User.Role.TRAINER, days_ago=2)
+        TrainerProfile.objects.create(
+            user=pending_user, license_number='L2', biography='Bio',
+            status=TrainerProfile.Status.PENDING,
+        )
+
+    def setUp(self):
+        self.client.force_authenticate(self.admin)
+
+    def test_overview_30d_counts_and_deltas(self):
+        res = self.client.get(reverse('admin-stats-overview'), {'period': '30d'})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        d = res.data
+        self.assertEqual(d['period'], '30d')
+
+        # 5 new clients in current 30d, 2 in prior. delta = (5-2)/2 * 100 = 150.0
+        self.assertEqual(d['new_clients']['count'], 5)
+        self.assertEqual(d['new_clients']['delta_pct'], 150.0)
+
+        # 2 new trainers in current (cur_trainer + pending_trainer), 2 in prior
+        self.assertEqual(d['new_trainers']['count'], 2)
+        self.assertEqual(d['new_trainers']['delta_pct'], 0.0)
+
+        # 1 renewal in current, 1 in prior
+        self.assertEqual(d['membership_renewals']['count'], 1)
+        self.assertEqual(d['membership_renewals']['delta_pct'], 0.0)
+
+        # active clients = clients with COMPLETED payments in window.
+        # old_client (renewal) + cur_client_0 (first-time) = 2.
+        # cur_client_2 had a REFUNDED payment, so excluded.
+        self.assertEqual(d['active_clients']['count'], 2)
+
+        # 1 pending trainer (the cur_trainer was approved, pending_trainer is pending).
+        self.assertEqual(d['pending_trainer_approvals'], 1)
+
+    def test_zero_baseline_returns_null_delta(self):
+        # Window 7d: prior 7d has no users joined -> delta should be null.
+        res = self.client.get(reverse('admin-stats-overview'), {'period': '7d'})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        # New trainers in current 7d = 0 (cur_trainer was 10 days ago, pending was 2),
+        # prior 7d = 0. So both zero -> delta None.
+        # Tighter assertion: pick whichever cell is exactly zero/zero in our fixture.
+        # new_trainers: current 7d window has pending_trainer (2 days ago). Prior 7d (8-14 days ago) has cur_trainer (10 days ago) -> 1.
+        # So instead: check renewals where current 7d has 1 (5 days ago), prior 7d has 0.
+        self.assertIsNone(res.data['membership_renewals']['delta_pct'])
+        self.assertEqual(res.data['membership_renewals']['count'], 1)
+
+    def test_invalid_period_returns_400(self):
+        res = self.client.get(reverse('admin-stats-overview'), {'period': 'lifetime'})
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_signups_timeseries_zero_fills_missing_days(self):
+        res = self.client.get(reverse('admin-stats-signups-timeseries'),
+                              {'period': '7d', 'role': 'CLIENT'})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        series = res.data['series']
+        self.assertEqual(len(series), 7)
+        # All entries have a date and a count >= 0.
+        for entry in series:
+            self.assertIn('date', entry)
+            self.assertGreaterEqual(entry['count'], 0)
+        total = sum(e['count'] for e in series)
+        # 5 cur_clients joined within 1..5 days ago, all inside 7d window.
+        self.assertEqual(total, 5)
+
+    def test_signups_timeseries_invalid_role(self):
+        res = self.client.get(reverse('admin-stats-signups-timeseries'),
+                              {'period': '7d', 'role': 'WIZARD'})
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_recent_activity_includes_all_event_types(self):
+        res = self.client.get(reverse('admin-stats-recent-activity'), {'limit': 20})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        types = {e['type'] for e in res.data['events']}
+        self.assertIn('new_client', types)
+        self.assertIn('new_trainer', types)
+        self.assertIn('trainer_approved', types)
+        self.assertIn('refund', types)
+
+        # Sorted descending by timestamp.
+        timestamps = [e['timestamp'] for e in res.data['events']]
+        self.assertEqual(timestamps, sorted(timestamps, reverse=True))
+
+    def test_recent_activity_respects_limit(self):
+        res = self.client.get(reverse('admin-stats-recent-activity'), {'limit': 3})
+        self.assertEqual(len(res.data['events']), 3)
+
+    def test_non_admin_forbidden(self):
+        client_user = User.objects.create_user(
+            username='nope_user', password='p', role=User.Role.CLIENT,
+        )
+        self.client.force_authenticate(client_user)
+        res = self.client.get(reverse('admin-stats-overview'))
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class ClientProfileTests(APITestCase):
+    """Self-service client profile endpoint."""
+
+    def setUp(self):
+        from .models import ClientProfile
+        from catalog.models import Accessory, TrainingGoal
+        self.user = User.objects.create_user(
+            username='cli', password='p', email='cli@e.com',
+            first_name='Anna', last_name='Doe',
+            role=User.Role.CLIENT,
+        )
+        self.profile = ClientProfile.objects.create(user=self.user)
+        self.mat = Accessory.objects.create(name='Yoga mat')
+        self.band = Accessory.objects.create(name='Resistance band')
+        self.goal_loss = TrainingGoal.objects.create(name='Weight loss')
+        self.goal_gain = TrainingGoal.objects.create(name='Muscle gain')
+        self.client.force_authenticate(self.user)
+
+    def test_get_returns_empty_profile_with_is_complete_false(self):
+        res = self.client.get(reverse('client-me-profile'))
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertFalse(res.data['is_complete'])
+        self.assertEqual(res.data['home_accessories'], [])
+        self.assertEqual(res.data['goals'], [])
+        self.assertEqual(res.data['user']['username'], 'cli')
+
+    def test_patch_updates_user_and_profile_fields(self):
+        body = {
+            'first_name': 'Annabelle', 'last_name': 'Smith',
+            'date_of_birth': '1995-06-01', 'gender': 'F',
+            'height': 168, 'weight': 62, 'circumference': 75,
+            'description': 'I want to feel stronger.',
+            'health_status': 'Mild asthma.',
+            'weekly_workouts': 4, 'workout_location': 'home',
+            'home_accessory_ids': [self.mat.id, self.band.id],
+            'goal_ids': [self.goal_loss.id],
+        }
+        res = self.client.patch(reverse('client-me-profile'), body, format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+        self.profile.refresh_from_db()
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.first_name, 'Annabelle')
+        self.assertEqual(self.user.last_name, 'Smith')
+        self.assertEqual(str(self.profile.date_of_birth), '1995-06-01')
+        self.assertEqual(self.profile.gender, 'F')
+        self.assertEqual(self.profile.height, 168)
+        self.assertEqual(self.profile.weight, 62)
+        self.assertEqual(self.profile.circumference, 75)
+        self.assertEqual(self.profile.weekly_workouts, 4)
+        self.assertEqual(self.profile.workout_location, 'home')
+
+        self.assertEqual(
+            set(self.profile.home_accessories.values_list('id', flat=True)),
+            {self.mat.id, self.band.id},
+        )
+        self.assertEqual(
+            set(self.profile.goals.values_list('id', flat=True)),
+            {self.goal_loss.id},
+        )
+
+        self.assertTrue(res.data['is_complete'])
+        self.assertEqual(
+            sorted(a['name'] for a in res.data['home_accessories']),
+            ['Resistance band', 'Yoga mat'],
+        )
+
+    def test_patch_with_invalid_height_returns_400(self):
+        res = self.client.patch(reverse('client-me-profile'), {'height': 9999}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('height', res.data)
+
+    def test_patch_partial_fields(self):
+        # Filling only some fields keeps is_complete False.
+        res = self.client.patch(reverse('client-me-profile'),
+                                {'gender': 'M'}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertFalse(res.data['is_complete'])
+
+    def test_clearing_m2m_accepted(self):
+        self.profile.home_accessories.add(self.mat)
+        self.profile.goals.add(self.goal_loss)
+        res = self.client.patch(reverse('client-me-profile'),
+                                {'home_accessory_ids': [], 'goal_ids': []},
+                                format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(self.profile.home_accessories.count(), 0)
+        self.assertEqual(self.profile.goals.count(), 0)
+
+    def test_inactive_or_deleted_goal_rejected(self):
+        from catalog.models import TrainingGoal
+        bad = TrainingGoal.objects.create(name='Inactive', is_active=False)
+        res = self.client.patch(reverse('client-me-profile'),
+                                {'goal_ids': [bad.id]}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_trainer_cannot_access_client_profile(self):
+        trainer = User.objects.create_user(
+            username='t1', password='p', role=User.Role.TRAINER,
+        )
+        self.client.force_authenticate(trainer)
+        res = self.client.get(reverse('client-me-profile'))
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_anonymous_blocked(self):
+        self.client.force_authenticate(None)
+        res = self.client.get(reverse('client-me-profile'))
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)

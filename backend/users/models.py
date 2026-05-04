@@ -43,6 +43,7 @@ class TrainerProfile(models.Model):
     average_rating = models.FloatField(default=0.0)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
     rejection_reason = models.TextField(blank=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
     is_deleted = models.BooleanField(default=False)
 
     def __str__(self):
@@ -62,12 +63,30 @@ class ClientProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='client_profile')
     date_of_birth = models.DateField(null=True, blank=True)
     gender = models.CharField(max_length=1, choices=Gender.choices, blank=True)
-    weight = models.FloatField(null=True, blank=True)
-    height = models.FloatField(null=True, blank=True)
+    weight = models.FloatField(null=True, blank=True)   # kg
+    height = models.FloatField(null=True, blank=True)   # cm
+    circumference = models.FloatField(null=True, blank=True)  # cm (waist)
+    description = models.TextField(blank=True)
     health_status = models.TextField(blank=True)
     workout_location = models.CharField(max_length=4, choices=WorkoutLocation.choices, default=WorkoutLocation.GYM)
     weekly_workouts = models.IntegerField(default=3)
+    home_accessories = models.ManyToManyField(
+        'catalog.Accessory', blank=True, related_name='clients_owning',
+    )
+    goals = models.ManyToManyField(
+        'catalog.TrainingGoal', blank=True, related_name='clients_pursuing',
+    )
     trainer = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='clients')
+
+    REQUIRED_FOR_COMPLETE = ('date_of_birth', 'gender', 'height', 'weight', 'weekly_workouts', 'workout_location')
+
+    @property
+    def is_complete(self):
+        for field in self.REQUIRED_FOR_COMPLETE:
+            value = getattr(self, field, None)
+            if value in (None, ''):
+                return False
+        return True
 
     def __str__(self):
         return f"Client: {self.user.get_full_name()}"

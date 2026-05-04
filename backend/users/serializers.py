@@ -76,13 +76,16 @@ class RegisterTrainerSerializer(serializers.ModelSerializer):
             'date_of_birth': validated_data.pop('date_of_birth'),
             'gender': validated_data.pop('gender'),
         }
+        initial_status = self._initial_status()
+        if initial_status == TrainerProfile.Status.APPROVED:
+            profile_fields['approved_at'] = timezone.now()
         user = User.objects.create_user(
             **validated_data,
             role=User.Role.TRAINER,
         )
         TrainerProfile.objects.create(
             user=user,
-            status=self._initial_status(),
+            status=initial_status,
             **profile_fields,
         )
         return user

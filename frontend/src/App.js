@@ -5,6 +5,7 @@ import LandingPage from './pages/LandingPage';
 import ResetPassword from './pages/ResetPassword';
 import TrainerDashboard from './pages/TrainerDashboard';
 import ClientDashboard from './pages/ClientDashboard';
+import ClientProfile from './pages/ClientProfile';
 import AdminLayout from './pages/admin/AdminLayout';
 import AdminHome from './pages/admin/AdminHome';
 import AdminTrainers from './pages/admin/AdminTrainers';
@@ -51,6 +52,11 @@ const AppRoutes = () => {
       <Route path="/client" element={
         <ProtectedRoute allowedRoles={['client']}>
           <ClientDashboard />
+        </ProtectedRoute>
+      } />
+      <Route path="/client/profile" element={
+        <ProtectedRoute allowedRoles={['client']}>
+          <ClientProfile />
         </ProtectedRoute>
       } />
     </Routes>
