@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Equipment, Accessory
+from .models import Equipment, Accessory, TrainingGoal
 
 
 class _CatalogItemSerializer(serializers.ModelSerializer):
@@ -19,3 +19,10 @@ class EquipmentSerializer(_CatalogItemSerializer):
 class AccessorySerializer(_CatalogItemSerializer):
     class Meta(_CatalogItemSerializer.Meta):
         model = Accessory
+
+
+class TrainingGoalSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TrainingGoal
+        fields = ['id', 'name', 'description', 'is_active', 'is_deleted', 'created_at']
+        read_only_fields = ['id', 'is_deleted', 'created_at']

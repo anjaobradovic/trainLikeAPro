@@ -2,7 +2,14 @@ import { useCallback, useEffect, useState } from 'react';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
 
-export default function CatalogManager({ resourceLabel, resourceLabelPlural, endpoint }) {
+export default function CatalogManager({
+  resourceLabel,
+  resourceLabelPlural,
+  endpoint,
+  showImageField = true,
+  extraColumns = [],
+  nameBadges,
+}) {
   const toast = useToast();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -88,33 +95,46 @@ export default function CatalogManager({ resourceLabel, resourceLabelPlural, end
         <table className="admin-table">
           <thead>
             <tr>
-              <th style={{ width: 56 }}></th>
+              {showImageField && <th style={{ width: 56 }}></th>}
               <th>Name</th>
               <th>Description</th>
               <th>Created</th>
+              {extraColumns.map((col) => (
+                <th key={col.key} style={col.width ? { width: col.width } : undefined}>
+                  {col.header}
+                </th>
+              ))}
               <th style={{ width: 120, textAlign: 'right' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan="5" className="admin-empty">Loading...</td></tr>
+              <tr><td colSpan={4 + (showImageField ? 1 : 0) + extraColumns.length} className="admin-empty">Loading...</td></tr>
             )}
             {!loading && items.length === 0 && (
-              <tr><td colSpan="5" className="admin-empty">No {resourceLabelPlural.toLowerCase()} found.</td></tr>
+              <tr><td colSpan={4 + (showImageField ? 1 : 0) + extraColumns.length} className="admin-empty">No {resourceLabelPlural.toLowerCase()} found.</td></tr>
             )}
             {!loading && items.map((it) => (
               <tr key={it.id} className={it.is_deleted ? 'row-deleted' : ''}>
-                <td>
-                  {it.image
-                    ? <img src={it.image} alt="" className="catalog-thumb" />
-                    : <div className="catalog-thumb catalog-thumb-empty" />}
-                </td>
+                {showImageField && (
+                  <td>
+                    {it.image
+                      ? <img src={it.image} alt="" className="catalog-thumb" />
+                      : <div className="catalog-thumb catalog-thumb-empty" />}
+                  </td>
+                )}
                 <td>
                   <div className="catalog-name">{it.name}</div>
-                  {it.is_deleted && <span className="status-pill status-removed">Deleted</span>}
+                  <div className="catalog-badges">
+                    {it.is_deleted && <span className="status-pill status-removed">Deleted</span>}
+                    {nameBadges && nameBadges(it)}
+                  </div>
                 </td>
                 <td className="catalog-description">{it.description || '—'}</td>
                 <td>{formatDate(it.created_at)}</td>
+                {extraColumns.map((col) => (
+                  <td key={col.key}>{col.render(it, load)}</td>
+                ))}
                 <td className="catalog-actions">
                   <button
                     className="icon-btn"
@@ -140,6 +160,7 @@ export default function CatalogManager({ resourceLabel, resourceLabelPlural, end
           endpoint={endpoint}
           resourceLabel={resourceLabel}
           item={editing}
+          showImageField={showImageField}
           onClose={() => setEditing(null)}
           onSaved={handleSaved}
         />
@@ -164,7 +185,7 @@ export default function CatalogManager({ resourceLabel, resourceLabelPlural, end
   );
 }
 
-function CatalogFormModal({ endpoint, resourceLabel, item, onClose, onSaved }) {
+function CatalogFormModal({ endpoint, resourceLabel, item, showImageField = true, onClose, onSaved }) {
   const toast = useToast();
   const isEdit = Boolean(item.id);
   const [name, setName] = useState(item.name || '');
@@ -183,10 +204,10 @@ function CatalogFormModal({ endpoint, resourceLabel, item, onClose, onSaved }) {
     if (description.length > 4000) {
       e.description = 'Description is too long.';
     }
-    if (imageFile && !imageFile.type.startsWith('image/')) {
+    if (showImageField && imageFile && !imageFile.type.startsWith('image/')) {
       e.image = 'Selected file must be an image.';
     }
-    if (imageFile && imageFile.size > 5 * 1024 * 1024) {
+    if (showImageField && imageFile && imageFile.size > 5 * 1024 * 1024) {
       e.image = 'Image must be 5 MB or less.';
     }
     return e;
@@ -202,20 +223,24 @@ function CatalogFormModal({ endpoint, resourceLabel, item, onClose, onSaved }) {
     setErrors({});
     setBusy(true);
     try {
-      const form = new FormData();
-      form.append('name', name.trim());
-      form.append('description', description);
-      if (imageFile) form.append('image', imageFile);
+      let payload;
+      let config;
+      if (showImageField) {
+        payload = new FormData();
+        payload.append('name', name.trim());
+        payload.append('description', description);
+        if (imageFile) payload.append('image', imageFile);
+        config = { headers: { 'Content-Type': 'multipart/form-data' } };
+      } else {
+        payload = { name: name.trim(), description };
+        config = { headers: { 'Content-Type': 'application/json' } };
+      }
 
       if (isEdit) {
-        await api.patch(`${endpoint}${item.id}/`, form, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
+        await api.patch(`${endpoint}${item.id}/`, payload, config);
         toast.success(`${resourceLabel} updated.`);
       } else {
-        await api.post(endpoint, form, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
+        await api.post(endpoint, payload, config);
         toast.success(`${resourceLabel} added.`);
       }
       onSaved();
@@ -266,21 +291,23 @@ function CatalogFormModal({ endpoint, resourceLabel, item, onClose, onSaved }) {
             {errors.description && <span className="field-error">{errors.description}</span>}
           </div>
 
-          <div className="form-group">
-            <label>Image (optional)</label>
-            {item.image && !imageFile && (
-              <div className="catalog-current-image">
-                <img src={item.image} alt="current" />
-                <span>Current image</span>
-              </div>
-            )}
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setImageFile(e.target.files?.[0] || null)}
-            />
-            {errors.image && <span className="field-error">{errors.image}</span>}
-          </div>
+          {showImageField && (
+            <div className="form-group">
+              <label>Image (optional)</label>
+              {item.image && !imageFile && (
+                <div className="catalog-current-image">
+                  <img src={item.image} alt="current" />
+                  <span>Current image</span>
+                </div>
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setImageFile(e.target.files?.[0] || null)}
+              />
+              {errors.image && <span className="field-error">{errors.image}</span>}
+            </div>
+          )}
 
           <div className="admin-modal-actions">
             <button type="button" className="btn-ghost" onClick={onClose} disabled={busy}>
