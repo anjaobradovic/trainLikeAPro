@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     ClientTrainerRequestViewSet,
     ExerciseViewSet,
+    TrainerReviewViewSet,
     TrainingExerciseViewSet,
     TrainingPlanViewSet,
     TrainingReviewViewSet,
@@ -45,6 +46,12 @@ router.register(
     r'reviews',
     TrainingReviewViewSet,
     basename='reviews'
+)
+
+router.register(
+    r'trainer-reviews',
+    TrainerReviewViewSet,
+    basename='trainer-reviews'
 )
 
 urlpatterns = router.urls

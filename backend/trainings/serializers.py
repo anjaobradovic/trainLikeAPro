@@ -9,8 +9,10 @@ from .models import (
     Exercise,
     Training,
     TrainingExercise,
+    TrainingExerciseReview,
     TrainingPlan,
-    TrainingReview
+    TrainingReview,
+    TrainerReview
 )
 
 
@@ -96,11 +98,20 @@ class ExerciseSerializer(serializers.ModelSerializer):
         read_only_fields = ['trainer']
 
 
+class TrainingExerciseReviewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TrainingExerciseReview
+        fields = ['id', 'training_exercise', 'rating', 'comment', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
+
+
 class TrainingExerciseSerializer(serializers.ModelSerializer):
     exercise_name = serializers.CharField(
         source='exercise.name',
         read_only=True
     )
+
+    review = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = TrainingExercise
@@ -112,7 +123,17 @@ class TrainingExerciseSerializer(serializers.ModelSerializer):
             'reps',
             'duration_minutes',
             'order',
+            'review',
         ]
+
+    def get_review(self, obj):
+        try:
+            review = obj.review
+        except TrainingExerciseReview.DoesNotExist:
+            return None
+        except Exception:
+            return None
+        return TrainingExerciseReviewSerializer(review).data
 
 
 class TrainingReviewSerializer(serializers.ModelSerializer):
@@ -169,3 +190,34 @@ class TrainingPlanSerializer(serializers.ModelSerializer):
         model = TrainingPlan
         fields = '__all__'
         read_only_fields = ['trainer']
+
+
+class TrainerReviewSerializer(serializers.ModelSerializer):
+    client_name = serializers.SerializerMethodField(read_only=True)
+    trainer_name = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = TrainerReview
+        fields = [
+            'id',
+            'client',
+            'client_name',
+            'trainer',
+            'trainer_name',
+            'rating',
+            'comment',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['client', 'created_at', 'updated_at']
+
+    def get_client_name(self, obj):
+        return obj.client.get_full_name() or obj.client.username
+
+    def get_trainer_name(self, obj):
+        return obj.trainer.get_full_name() or obj.trainer.username
+
+    def validate_rating(self, value):
+        if value < 1 or value > 5:
+            raise serializers.ValidationError('Rating must be between 1 and 5.')
+        return value

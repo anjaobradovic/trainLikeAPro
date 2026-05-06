@@ -85,6 +85,8 @@ class Training(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
 
+    completed_at = models.DateTimeField(null=True, blank=True)
+
     def __str__(self):
         return self.title
 
@@ -138,6 +140,63 @@ class TrainingReview(models.Model):
 
     def __str__(self):
         return f"Review {self.rating}/5 for {self.training}"
+
+
+class TrainingExerciseReview(models.Model):
+    training_exercise = models.OneToOneField(
+        TrainingExercise,
+        on_delete=models.CASCADE,
+        related_name='review'
+    )
+
+    client = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='exercise_reviews'
+    )
+
+    rating = models.IntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(5)]
+    )
+
+    comment = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Exercise review {self.rating}/5"
+
+
+class TrainerReview(models.Model):
+    client = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='trainer_reviews_given'
+    )
+
+    trainer = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='trainer_reviews_received'
+    )
+
+    rating = models.IntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(5)]
+    )
+
+    comment = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('client', 'trainer')
+
+    def __str__(self):
+        return f"Trainer review {self.rating}/5 for {self.trainer}"
 
 
 class TrainingPlan(models.Model):
