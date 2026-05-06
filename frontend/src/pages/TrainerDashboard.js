@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function TrainerDashboard() {
@@ -14,17 +15,30 @@ export default function TrainerDashboard() {
       color: '#fff',
     }}>
       <h1 style={{ color: '#ff6b00', fontSize: '3rem', margin: 0 }}>Hello Trainer</h1>
-      <button onClick={logout} style={{
-        padding: '0.7rem 1.5rem',
-        background: '#ff6b00',
-        border: 'none',
-        color: '#fff',
-        borderRadius: '8px',
-        cursor: 'pointer',
-        fontWeight: 600,
-      }}>
-        Logout
-      </button>
+      <div style={{ display: 'flex', gap: '0.8rem' }}>
+        <Link to="/chat" style={{
+          padding: '0.7rem 1.5rem',
+          background: 'transparent',
+          border: '1px solid #ff6b00',
+          color: '#ff6b00',
+          borderRadius: '8px',
+          textDecoration: 'none',
+          fontWeight: 600,
+        }}>
+          Chat
+        </Link>
+        <button onClick={logout} style={{
+          padding: '0.7rem 1.5rem',
+          background: '#ff6b00',
+          border: 'none',
+          color: '#fff',
+          borderRadius: '8px',
+          cursor: 'pointer',
+          fontWeight: 600,
+        }}>
+          Logout
+        </button>
+      </div>
     </div>
   );
 }

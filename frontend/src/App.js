@@ -6,6 +6,7 @@ import ResetPassword from './pages/ResetPassword';
 import TrainerDashboard from './pages/TrainerDashboard';
 import ClientDashboard from './pages/ClientDashboard';
 import ClientProfile from './pages/ClientProfile';
+import Chat from './pages/Chat';
 import AdminLayout from './pages/admin/AdminLayout';
 import AdminHome from './pages/admin/AdminHome';
 import AdminTrainers from './pages/admin/AdminTrainers';
@@ -57,6 +58,11 @@ const AppRoutes = () => {
       <Route path="/client/profile" element={
         <ProtectedRoute allowedRoles={['client']}>
           <ClientProfile />
+        </ProtectedRoute>
+      } />
+      <Route path="/chat" element={
+        <ProtectedRoute allowedRoles={['trainer', 'client']}>
+          <Chat />
         </ProtectedRoute>
       } />
     </Routes>

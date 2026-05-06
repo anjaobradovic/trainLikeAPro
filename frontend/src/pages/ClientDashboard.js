@@ -28,7 +28,10 @@ export default function ClientDashboard() {
           <span className="logo-icon">LP</span>
           <span className="logo-text">LikeAPro</span>
         </div>
-        <button onClick={handleLogout} className="client-logout">Logout</button>
+        <div style={{ display: 'flex', gap: '0.6rem' }}>
+          <Link to="/chat" className="client-logout">Chat</Link>
+          <button onClick={handleLogout} className="client-logout">Logout</button>
+        </div>
       </nav>
 
       <main className="client-main">
