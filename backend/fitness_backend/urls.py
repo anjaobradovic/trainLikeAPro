@@ -30,6 +30,7 @@ urlpatterns = [
     path('api/admin/', include('payments.admin_urls')),
     path('api/', include('catalog.public_urls')),
     path('api/chat/', include('chat.urls')),
+    path('api/trainings/', include('trainings.urls')),
 ]
 
 if settings.DEBUG:

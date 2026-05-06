@@ -310,10 +310,10 @@ export default function ClientDashboard() {
 function ProfileSummary({ profile }) {
 
   const goals =
-    profile.goals.map((g) => g.name).join(', ') || '—';
+    (profile.goals || []).map((g) => g.name).join(', ') || '—';
 
   const accessories =
-    profile.home_accessories
+    (profile.home_accessories || [])
       .map((a) => a.name)
       .join(', ') || '—';
 
