@@ -51,3 +51,8 @@ class MeView(generics.RetrieveAPIView):
 
     def get_object(self):
         return self.request.user
+
+class AllUsersView(generics.ListAPIView):
+    queryset = User.objects.all()
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = UserSerializer
