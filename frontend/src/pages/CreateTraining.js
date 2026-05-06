@@ -245,7 +245,7 @@ export default function CreateTraining() {
                 }}
               >
                 <input
-                  placeholder="Naslov"
+                  placeholder="Title"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   required
@@ -253,7 +253,7 @@ export default function CreateTraining() {
                 />
 
                 <textarea
-                  placeholder="Opis"
+                  placeholder="Description"
                   value={description}
                   onChange={(e) =>
                     setDescription(e.target.value)
@@ -274,7 +274,7 @@ export default function CreateTraining() {
                   style={inputStyle}
                 >
                   <option value="">
-                    Izaberi klijenta
+                    Select a client
                   </option>
 
                   {clients.map((c) => (
@@ -424,7 +424,7 @@ export default function CreateTraining() {
                     style={inputStyle}
                   >
                     <option value="">
-                      Izaberi vezbu
+                      Select an exercise
                     </option>
 
                     {availableExercises.map((ex) => (
