@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api/axios';
 import { useToast } from '../context/ToastContext';
 import './ClientArea.css';
@@ -25,6 +25,8 @@ const fromProfile = (p) => ({
 export default function ClientProfile() {
   const toast = useToast();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const onboarding = searchParams.get('onboard') === '1';
   const [profile, setProfile] = useState(null);
   const [accessories, setAccessories] = useState([]);
   const [goals, setGoals] = useState([]);
@@ -149,15 +151,43 @@ export default function ClientProfile() {
           <span className="logo-icon">LP</span>
           <span className="logo-text">LikeAPro</span>
         </Link>
-        <Link to="/client" className="client-logout">← Back</Link>
+        {!onboarding && (
+          <Link to="/client" className="client-logout">← Back</Link>
+        )}
       </nav>
 
       <main className="client-main">
-        <h1 className="client-greeting">Your profile</h1>
+        <h1 className="client-greeting">
+          {onboarding ? 'Welcome — set up your profile' : 'Your profile'}
+        </h1>
         <p className="client-sub">
-          Tell us about yourself so we can tailor your plan.
+          {onboarding
+            ? 'Fill in the required fields below so your trainer can build the right plan for you.'
+            : 'Tell us about yourself so we can tailor your plan.'}
           {!profile?.is_complete && ' Required fields are marked with *.'}
         </p>
+
+        {onboarding && !profile?.is_complete && (
+          <div
+            style={{
+              background: 'linear-gradient(135deg, #2a1500 0%, #1a0d00 100%)',
+              border: '1px solid rgba(255,107,0,0.35)',
+              borderRadius: '14px',
+              padding: '1rem 1.2rem',
+              color: '#ffd2a8',
+              marginBottom: '1.4rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.7rem',
+            }}
+          >
+            <span style={{ fontSize: '1.2rem' }}>👋</span>
+            <span style={{ lineHeight: 1.5 }}>
+              You need to complete your profile before you can start. We'll
+              redirect you to your dashboard once you save.
+            </span>
+          </div>
+        )}
 
         <form onSubmit={submit} className="profile-form" noValidate>
           <Section title="Basics">
@@ -252,9 +282,11 @@ export default function ClientProfile() {
           </Section>
 
           <div className="profile-actions">
-            <Link to="/client" className="btn-secondary">Cancel</Link>
+            {!onboarding && (
+              <Link to="/client" className="btn-secondary">Cancel</Link>
+            )}
             <button type="submit" className="btn-primary" disabled={saving}>
-              {saving ? 'Saving...' : 'Save profile'}
+              {saving ? 'Saving...' : (onboarding ? 'Save & continue' : 'Save profile')}
             </button>
           </div>
         </form>
