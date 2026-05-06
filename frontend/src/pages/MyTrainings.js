@@ -106,9 +106,73 @@ export default function MyTrainings() {
                 </div>
               ))}
             </div>
+
+            <ClientReview review={training.review} />
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function ClientReview({ review }) {
+  return (
+    <div
+      style={{
+        marginTop: '25px',
+        paddingTop: '20px',
+        borderTop: '1px solid #222',
+      }}
+    >
+      <h3
+        style={{
+          color: '#ff6b00',
+          marginBottom: '12px',
+          fontSize: '1.2rem',
+        }}
+      >
+        Client Review
+      </h3>
+
+      {review ? (
+        <div>
+          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+            {[1, 2, 3, 4, 5].map((n) => (
+              <span
+                key={n}
+                style={{
+                  color: n <= review.rating ? '#ff6b00' : '#333',
+                  fontSize: '1.4rem',
+                }}
+              >
+                ★
+              </span>
+            ))}
+            <span style={{ color: '#999', marginLeft: '10px' }}>
+              {review.rating}/5
+            </span>
+            {review.client_name && (
+              <span style={{ color: '#666', marginLeft: '12px', fontSize: '0.95rem' }}>
+                — {review.client_name}
+              </span>
+            )}
+          </div>
+
+          {review.feedback && (
+            <p
+              style={{
+                color: '#ddd',
+                marginTop: '10px',
+                whiteSpace: 'pre-wrap',
+              }}
+            >
+              {review.feedback}
+            </p>
+          )}
+        </div>
+      ) : (
+        <p style={{ color: '#888' }}>No review yet.</p>
+      )}
     </div>
   );
 }

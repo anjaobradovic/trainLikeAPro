@@ -37,6 +37,10 @@ export default function CreateTraining() {
         .filter((r) => r.status === 'ACCEPTED')
         .map((r) => ({
           id: r.client,
+          name:
+            r.client_detail?.full_name ||
+            r.client_detail?.username ||
+            `Client #${r.client}`,
         }));
 
       setClients(acceptedClients);
@@ -89,6 +93,30 @@ export default function CreateTraining() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (!client) {
+      alert('Please select a client.');
+      return;
+    }
+
+    const cleanedExercises = exercises.map((item) => ({
+      exercise: Number(item.exercise),
+      sets: Number(item.sets),
+      reps: Number(item.reps),
+      duration_minutes: Number(item.duration_minutes),
+    }));
+
+    const invalid = cleanedExercises.find(
+      (ex) =>
+        !ex.exercise ||
+        Number.isNaN(ex.sets) ||
+        Number.isNaN(ex.reps) ||
+        Number.isNaN(ex.duration_minutes)
+    );
+    if (invalid) {
+      alert('Please fill in every exercise field (exercise, sets, reps, minutes).');
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -97,13 +125,8 @@ export default function CreateTraining() {
         {
           title,
           description,
-          client,
-          exercises: exercises.map((item) => ({
-            exercise: Number(item.exercise),
-            sets: Number(item.sets),
-            reps: Number(item.reps),
-            duration_minutes: Number(item.duration_minutes),
-          })),
+          client: Number(client),
+          exercises: cleanedExercises,
         }
       );
 
@@ -114,7 +137,16 @@ export default function CreateTraining() {
     } catch (err) {
       console.log(err.response?.data || err);
 
-      alert('Error creating training');
+      const data = err.response?.data;
+      let msg;
+      if (typeof data === 'string') {
+        msg = data;
+      } else if (data && typeof data === 'object') {
+        msg = data.detail || JSON.stringify(data);
+      } else {
+        msg = err.message || 'Unknown error';
+      }
+      alert(`Error creating training:\n${msg}`);
     } finally {
       setLoading(false);
     }
@@ -130,12 +162,12 @@ export default function CreateTraining() {
     >
       <nav
         style={{
-          height: '90px',
+          height: '64px',
           borderBottom: '1px solid #1f1f1f',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '0 40px',
+          padding: '0 28px',
           background: '#0a0a0a',
         }}
       >
@@ -143,19 +175,20 @@ export default function CreateTraining() {
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '14px',
+            gap: '10px',
           }}
         >
           <div
             style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '10px',
+              width: '32px',
+              height: '32px',
+              borderRadius: '8px',
               background: '#ff6b00',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               fontWeight: 'bold',
+              fontSize: '13px',
             }}
           >
             LP
@@ -164,7 +197,7 @@ export default function CreateTraining() {
           <h2
             style={{
               margin: 0,
-              fontSize: '22px',
+              fontSize: '16px',
             }}
           >
             LikeAPro
@@ -177,9 +210,10 @@ export default function CreateTraining() {
             background: '#ff6b00',
             color: '#fff',
             textDecoration: 'none',
-            padding: '12px 22px',
-            borderRadius: '12px',
+            padding: '8px 16px',
+            borderRadius: '10px',
             fontWeight: 'bold',
+            fontSize: '14px',
           }}
         >
           Back
@@ -188,14 +222,16 @@ export default function CreateTraining() {
 
       <div
         style={{
-          padding: '50px',
+          padding: '28px',
+          maxWidth: '1100px',
+          margin: '0 auto',
         }}
       >
         <h1
           style={{
             color: '#ff6b00',
-            fontSize: '64px',
-            marginBottom: '10px',
+            fontSize: '28px',
+            marginBottom: '6px',
           }}
         >
           Create Training
@@ -204,8 +240,8 @@ export default function CreateTraining() {
         <p
           style={{
             color: '#888',
-            fontSize: '24px',
-            marginBottom: '50px',
+            fontSize: '14px',
+            marginBottom: '24px',
           }}
         >
           Build personalized workout plans for your clients.
@@ -216,7 +252,7 @@ export default function CreateTraining() {
             style={{
               display: 'grid',
               gridTemplateColumns: '1.2fr 0.8fr',
-              gap: '30px',
+              gap: '20px',
               alignItems: 'start',
             }}
           >
@@ -224,14 +260,15 @@ export default function CreateTraining() {
               style={{
                 background: '#0b0b0b',
                 border: '1px solid #1f1f1f',
-                borderRadius: '28px',
-                padding: '30px',
+                borderRadius: '16px',
+                padding: '20px',
               }}
             >
               <h2
                 style={{
                   marginTop: 0,
-                  marginBottom: '30px',
+                  marginBottom: '18px',
+                  fontSize: '16px',
                 }}
               >
                 Training Details
@@ -241,7 +278,7 @@ export default function CreateTraining() {
                 style={{
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '20px',
+                  gap: '12px',
                 }}
               >
                 <input
@@ -260,8 +297,10 @@ export default function CreateTraining() {
                   }
                   style={{
                     ...inputStyle,
-                    minHeight: '130px',
-                    resize: 'none',
+                    height: 'auto',
+                    minHeight: '90px',
+                    padding: '10px 14px',
+                    resize: 'vertical',
                   }}
                 />
 
@@ -282,7 +321,7 @@ export default function CreateTraining() {
                       key={c.id}
                       value={c.id}
                     >
-                      Client #{c.id}
+                      {c.name}
                     </option>
                   ))}
                 </select>
@@ -292,13 +331,14 @@ export default function CreateTraining() {
                   onClick={addExercise}
                   style={{
                     width: 'fit-content',
-                    padding: '14px 22px',
+                    padding: '8px 16px',
                     border: 'none',
-                    borderRadius: '14px',
+                    borderRadius: '10px',
                     background: '#ff6b00',
                     color: '#fff',
                     fontWeight: 'bold',
                     cursor: 'pointer',
+                    fontSize: '13px',
                   }}
                 >
                   + Add Exercise
@@ -310,14 +350,15 @@ export default function CreateTraining() {
               style={{
                 background: '#0b0b0b',
                 border: '1px solid #1f1f1f',
-                borderRadius: '28px',
-                padding: '30px',
+                borderRadius: '16px',
+                padding: '20px',
               }}
             >
               <h2
                 style={{
                   marginTop: 0,
-                  marginBottom: '30px',
+                  marginBottom: '18px',
+                  fontSize: '16px',
                 }}
               >
                 Summary
@@ -327,7 +368,7 @@ export default function CreateTraining() {
                 style={{
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '24px',
+                  gap: '14px',
                 }}
               >
                 <SummaryItem
@@ -337,7 +378,10 @@ export default function CreateTraining() {
 
                 <SummaryItem
                   label="Selected Client"
-                  value={client || 'None'}
+                  value={
+                    clients.find((c) => String(c.id) === String(client))?.name
+                      || 'None'
+                  }
                 />
 
                 <SummaryItem
@@ -351,10 +395,10 @@ export default function CreateTraining() {
 
           <div
             style={{
-              marginTop: '40px',
+              marginTop: '20px',
               display: 'flex',
               flexDirection: 'column',
-              gap: '24px',
+              gap: '14px',
             }}
           >
             {exercises.map((exercise, index) => (
@@ -363,21 +407,23 @@ export default function CreateTraining() {
                 style={{
                   background: '#0b0b0b',
                   border: '1px solid #1f1f1f',
-                  borderRadius: '24px',
-                  padding: '30px',
+                  borderRadius: '14px',
+                  padding: '18px',
                 }}
               >
                 <div
                   style={{
                     display: 'flex',
                     justifyContent: 'space-between',
-                    marginBottom: '24px',
+                    alignItems: 'center',
+                    marginBottom: '14px',
                   }}
                 >
                   <h2
                     style={{
                       margin: 0,
                       color: '#ff6b00',
+                      fontSize: '15px',
                     }}
                   >
                     Exercise #{index + 1}
@@ -393,10 +439,11 @@ export default function CreateTraining() {
                         background: '#222',
                         border: 'none',
                         color: '#999',
-                        padding: '10px 18px',
-                        borderRadius: '12px',
+                        padding: '6px 12px',
+                        borderRadius: '8px',
                         cursor: 'pointer',
                         fontWeight: 'bold',
+                        fontSize: '12px',
                       }}
                     >
                       Remove
@@ -408,7 +455,7 @@ export default function CreateTraining() {
                   style={{
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '18px',
+                    gap: '10px',
                   }}
                 >
                   <select
@@ -442,7 +489,7 @@ export default function CreateTraining() {
                       display: 'grid',
                       gridTemplateColumns:
                         '1fr 1fr 1fr',
-                      gap: '18px',
+                      gap: '10px',
                     }}
                   >
                     <input
@@ -502,13 +549,13 @@ export default function CreateTraining() {
             disabled={loading}
             style={{
               width: '100%',
-              marginTop: '40px',
-              height: '70px',
+              marginTop: '20px',
+              height: '46px',
               border: 'none',
-              borderRadius: '18px',
+              borderRadius: '12px',
               background: '#ff6b00',
               color: '#fff',
-              fontSize: '22px',
+              fontSize: '15px',
               fontWeight: 'bold',
               cursor: 'pointer',
               opacity: loading ? 0.7 : 1,
@@ -535,13 +582,13 @@ function SummaryItem({
         display: 'flex',
         justifyContent: 'space-between',
         borderBottom: '1px solid #1f1f1f',
-        paddingBottom: '18px',
+        paddingBottom: '10px',
       }}
     >
       <span
         style={{
           color: '#777',
-          fontSize: '20px',
+          fontSize: '13px',
         }}
       >
         {label}
@@ -551,7 +598,7 @@ function SummaryItem({
         style={{
           color: green ? '#22c55e' : '#fff',
           fontWeight: 'bold',
-          fontSize: '20px',
+          fontSize: '13px',
         }}
       >
         {value}
@@ -562,13 +609,13 @@ function SummaryItem({
 
 const inputStyle = {
   width: '100%',
-  height: '62px',
-  borderRadius: '16px',
+  height: '40px',
+  borderRadius: '10px',
   border: '1px solid #1f1f1f',
   background: '#050505',
   color: '#fff',
-  padding: '0 18px',
-  fontSize: '18px',
+  padding: '0 12px',
+  fontSize: '14px',
   outline: 'none',
   boxSizing: 'border-box',
 };

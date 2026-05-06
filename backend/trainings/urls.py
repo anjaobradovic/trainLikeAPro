@@ -5,6 +5,7 @@ from .views import (
     ExerciseViewSet,
     TrainingExerciseViewSet,
     TrainingPlanViewSet,
+    TrainingReviewViewSet,
     TrainingViewSet
 )
 
@@ -38,6 +39,12 @@ router.register(
     r'trainings',
     TrainingViewSet,
     basename='trainings'
+)
+
+router.register(
+    r'reviews',
+    TrainingReviewViewSet,
+    basename='reviews'
 )
 
 urlpatterns = router.urls

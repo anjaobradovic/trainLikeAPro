@@ -9,7 +9,8 @@ from .models import (
     Exercise,
     Training,
     TrainingExercise,
-    TrainingPlan
+    TrainingPlan,
+    TrainingReview
 )
 
 
@@ -114,16 +115,53 @@ class TrainingExerciseSerializer(serializers.ModelSerializer):
         ]
 
 
+class TrainingReviewSerializer(serializers.ModelSerializer):
+    client_name = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = TrainingReview
+        fields = [
+            'id',
+            'training',
+            'client',
+            'client_name',
+            'rating',
+            'feedback',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['client', 'created_at', 'updated_at']
+
+    def get_client_name(self, obj):
+        return obj.client.get_full_name() or obj.client.username
+
+    def validate_rating(self, value):
+        if value < 1 or value > 5:
+            raise serializers.ValidationError('Rating must be between 1 and 5.')
+        return value
+
+
 class TrainingSerializer(serializers.ModelSerializer):
     training_exercises = TrainingExerciseSerializer(
         many=True,
         read_only=True
     )
 
+    review = serializers.SerializerMethodField(read_only=True)
+
     class Meta:
         model = Training
         fields = '__all__'
         read_only_fields = ['trainer']
+
+    def get_review(self, obj):
+        try:
+            review = obj.review
+        except TrainingReview.DoesNotExist:
+            return None
+        except Exception:
+            return None
+        return TrainingReviewSerializer(review).data
 
 
 class TrainingPlanSerializer(serializers.ModelSerializer):

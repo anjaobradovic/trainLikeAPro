@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../api/axios';
 
 export default function CreateExercise() {
@@ -58,20 +59,85 @@ export default function CreateExercise() {
         minHeight: '100vh',
         background: '#0a0a0a',
         color: '#fff',
-        padding: '40px',
       }}
     >
-      <h1
+      <nav
         style={{
-          color: '#ff6b00',
-          fontSize: '3rem',
-          marginBottom: '30px',
+          height: '64px',
+          borderBottom: '1px solid #1f1f1f',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 28px',
+          background: '#0a0a0a',
         }}
       >
-        Create Exercise
-      </h1>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+          }}
+        >
+          <div
+            style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '8px',
+              background: '#ff6b00',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 'bold',
+              fontSize: '13px',
+            }}
+          >
+            LP
+          </div>
 
-      <form
+          <h2
+            style={{
+              margin: 0,
+              fontSize: '16px',
+            }}
+          >
+            LikeAPro
+          </h2>
+        </div>
+
+        <Link
+          to="/trainer"
+          style={{
+            background: '#ff6b00',
+            color: '#fff',
+            textDecoration: 'none',
+            padding: '8px 16px',
+            borderRadius: '10px',
+            fontWeight: 'bold',
+            fontSize: '14px',
+          }}
+        >
+          Back
+        </Link>
+      </nav>
+
+      <div
+        style={{
+          padding: '40px',
+        }}
+      >
+        <h1
+          style={{
+            color: '#ff6b00',
+            fontSize: '3rem',
+            marginTop: 0,
+            marginBottom: '30px',
+          }}
+        >
+          Create Exercise
+        </h1>
+
+        <form
         onSubmit={handleSubmit}
         style={{
           display: 'flex',
@@ -179,6 +245,7 @@ export default function CreateExercise() {
             </div>
           ))}
         </div>
+      </div>
       </div>
     </div>
   );

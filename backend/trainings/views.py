@@ -9,7 +9,8 @@ from .models import (
     Exercise,
     Training,
     TrainingExercise,
-    TrainingPlan
+    TrainingPlan,
+    TrainingReview
 )
 
 from .serializers import (
@@ -17,7 +18,8 @@ from .serializers import (
     ExerciseSerializer,
     TrainingSerializer,
     TrainingExerciseSerializer,
-    TrainingPlanSerializer
+    TrainingPlanSerializer,
+    TrainingReviewSerializer
 )
 
 
@@ -128,6 +130,70 @@ class TrainingExerciseViewSet(viewsets.ModelViewSet):
     queryset = TrainingExercise.objects.all()
     serializer_class = TrainingExerciseSerializer
     permission_classes = [IsAuthenticated]
+
+
+class TrainingReviewViewSet(viewsets.ModelViewSet):
+    serializer_class = TrainingReviewSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+
+        if user.role == 'trainer':
+            return TrainingReview.objects.filter(training__trainer=user)
+
+        return TrainingReview.objects.filter(client=user)
+
+    def create(self, request, *args, **kwargs):
+        training_id = request.data.get('training')
+
+        try:
+            training = Training.objects.get(pk=training_id)
+        except Training.DoesNotExist:
+            return Response(
+                {'detail': 'Training not found.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if training.client_id != request.user.id:
+            return Response(
+                {'detail': 'You can only review your own trainings.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if hasattr(training, 'review'):
+            return Response(
+                {'detail': 'You have already reviewed this training.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(client=request.user, training=training)
+
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+
+        if instance.client_id != request.user.id:
+            return Response(
+                {'detail': 'You can only edit your own review.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+
+        if instance.client_id != request.user.id:
+            return Response(
+                {'detail': 'You can only delete your own review.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        return super().destroy(request, *args, **kwargs)
 
 
 class TrainingPlanViewSet(viewsets.ModelViewSet):
