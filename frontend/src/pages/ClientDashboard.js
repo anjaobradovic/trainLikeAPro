@@ -14,6 +14,7 @@ export default function ClientDashboard() {
   const [trainers, setTrainers] = useState([]);
   const [requests, setRequests] = useState([]);
   const [trainerReviews, setTrainerReviews] = useState([]);
+  const [bookingTrainer, setBookingTrainer] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -55,7 +56,11 @@ export default function ClientDashboard() {
     }
   };
 
-  const sendRequest = async (trainerId) => {
+  const openBooking = (trainer) => {
+    setBookingTrainer(trainer);
+  };
+
+  const finalizeBooking = async (trainerId) => {
     try {
       await api.post('/trainings/requests/', { trainer: trainerId });
       loadData();
@@ -180,7 +185,7 @@ export default function ClientDashboard() {
                       <div>
                         {!existingRequest && (
                           <button
-                            onClick={() => sendRequest(trainer.id)}
+                            onClick={() => openBooking(trainer)}
                             className="btn-orange"
                           >
                             Send Request
@@ -200,7 +205,7 @@ export default function ClientDashboard() {
                         )}
                         {existingRequest?.status === 'REJECTED' && (
                           <button
-                            onClick={() => sendRequest(trainer.id)}
+                            onClick={() => openBooking(trainer)}
                             className="btn-orange"
                           >
                             Send Again
@@ -224,6 +229,18 @@ export default function ClientDashboard() {
           </>
         )}
       </main>
+
+      {bookingTrainer && (
+        <BookTrainerModal
+          trainer={bookingTrainer}
+          onClose={() => setBookingTrainer(null)}
+          onPaid={async () => {
+            const t = bookingTrainer;
+            setBookingTrainer(null);
+            await finalizeBooking(t.id);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -471,6 +488,321 @@ function StarsInput({ value, hoverValue, onChange, onHover }) {
     </div>
   );
 }
+
+const PRICE_PER_DAY = 10;
+
+function BookTrainerModal({ trainer, onClose, onPaid }) {
+  const [step, setStep] = useState('duration'); // duration | payment | success
+  const [days, setDays] = useState(7);
+  const [card, setCard] = useState({
+    name: '',
+    number: '',
+    expiry: '',
+    cvv: '',
+  });
+  const [errors, setErrors] = useState({});
+  const [processing, setProcessing] = useState(false);
+
+  const total = (Number(days) || 0) * PRICE_PER_DAY;
+
+  const validateDuration = () => {
+    const n = Number(days);
+    if (!Number.isInteger(n) || n < 1) return { days: 'Pick at least 1 day.' };
+    if (n > 365) return { days: 'Maximum is 365 days.' };
+    return {};
+  };
+
+  const goToPayment = () => {
+    const errs = validateDuration();
+    setErrors(errs);
+    if (Object.keys(errs).length === 0) setStep('payment');
+  };
+
+  const handleCardChange = (key) => (e) => {
+    let value = e.target.value;
+    if (key === 'number') {
+      value = value.replace(/\D/g, '').slice(0, 19);
+      value = value.replace(/(.{4})/g, '$1 ').trim();
+    } else if (key === 'expiry') {
+      value = value.replace(/\D/g, '').slice(0, 4);
+      if (value.length >= 3) value = `${value.slice(0, 2)}/${value.slice(2)}`;
+    } else if (key === 'cvv') {
+      value = value.replace(/\D/g, '').slice(0, 4);
+    } else if (key === 'name') {
+      value = value.replace(/[^A-Za-z\s'-]/g, '').slice(0, 60);
+    }
+    setCard((c) => ({ ...c, [key]: value }));
+  };
+
+  const validateCard = () => {
+    const errs = {};
+    const digits = card.number.replace(/\s+/g, '');
+    if (!card.name.trim() || card.name.trim().length < 2) {
+      errs.name = 'Cardholder name is required.';
+    }
+    if (digits.length < 13 || digits.length > 19) {
+      errs.number = 'Enter a valid card number (13–19 digits).';
+    } else if (!luhnCheck(digits)) {
+      errs.number = 'Card number failed validation.';
+    }
+
+    const m = card.expiry.match(/^(\d{2})\/(\d{2})$/);
+    if (!m) {
+      errs.expiry = 'Use MM/YY format.';
+    } else {
+      const month = Number(m[1]);
+      const year = 2000 + Number(m[2]);
+      if (month < 1 || month > 12) {
+        errs.expiry = 'Month must be 01–12.';
+      } else {
+        const now = new Date();
+        const exp = new Date(year, month, 0, 23, 59, 59);
+        if (exp < now) errs.expiry = 'Card has expired.';
+        if (year > now.getFullYear() + 20) errs.expiry = 'Year is too far ahead.';
+      }
+    }
+
+    if (!/^\d{3,4}$/.test(card.cvv)) {
+      errs.cvv = 'CVV must be 3 or 4 digits.';
+    }
+    return errs;
+  };
+
+  const submitPayment = (e) => {
+    e.preventDefault();
+    const errs = validateCard();
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+
+    setProcessing(true);
+    setTimeout(() => {
+      setProcessing(false);
+      setStep('success');
+    }, 800);
+  };
+
+  const trainerName =
+    `${trainer.first_name || ''} ${trainer.last_name || ''}`.trim() ||
+    trainer.username;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540 }}>
+        <div className="modal-header">
+          <h2 className="modal-title">
+            {step === 'success' ? 'Payment received' : `Book ${trainerName}`}
+          </h2>
+          {step !== 'success' && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="modal-close"
+              aria-label="Close"
+            >
+              ×
+            </button>
+          )}
+        </div>
+
+        {step === 'duration' && (
+          <div>
+            <p className="muted" style={{ margin: '0 0 1.2rem' }}>
+              Choose for how many days you want to train with{' '}
+              <strong style={{ color: '#fff' }}>{trainerName}</strong>.{' '}
+              The price is <strong style={{ color: '#ff8a3d' }}>€{PRICE_PER_DAY} per day</strong>.
+            </p>
+
+            <label className="profile-field" style={{ marginBottom: 0 }}>
+              <span className="profile-field-label">Duration (days)</span>
+              <input
+                type="number"
+                min="1"
+                max="365"
+                value={days}
+                onChange={(e) => setDays(e.target.value)}
+                style={cardInputStyle}
+              />
+              {errors.days && <span className="field-error">{errors.days}</span>}
+            </label>
+
+            <div
+              style={{
+                marginTop: '1.2rem',
+                padding: '1rem 1.2rem',
+                borderRadius: '14px',
+                background: 'linear-gradient(135deg, #2a1500 0%, #1a0d00 100%)',
+                border: '1px solid rgba(255,107,0,0.35)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <span style={{ color: '#ddd' }}>Total to pay</span>
+              <span style={{ color: '#ff8a3d', fontSize: '1.4rem', fontWeight: 700 }}>
+                €{total}
+              </span>
+            </div>
+
+            <div className="modal-actions">
+              <button type="button" onClick={onClose} className="btn-ghost">
+                Cancel
+              </button>
+              <button type="button" onClick={goToPayment} className="btn-orange">
+                Continue to payment
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === 'payment' && (
+          <form onSubmit={submitPayment} noValidate>
+            <p className="muted" style={{ margin: '0 0 1rem' }}>
+              <strong style={{ color: '#fff' }}>{days} day{Number(days) === 1 ? '' : 's'}</strong>{' '}
+              · Total <strong style={{ color: '#ff8a3d' }}>€{total}</strong>
+            </p>
+
+            <label className="profile-field">
+              <span className="profile-field-label">Cardholder name</span>
+              <input
+                type="text"
+                value={card.name}
+                onChange={handleCardChange('name')}
+                placeholder="As printed on the card"
+                style={cardInputStyle}
+              />
+              {errors.name && <span className="field-error">{errors.name}</span>}
+            </label>
+
+            <label className="profile-field">
+              <span className="profile-field-label">Card number</span>
+              <input
+                type="text"
+                value={card.number}
+                onChange={handleCardChange('number')}
+                placeholder="1234 5678 9012 3456"
+                inputMode="numeric"
+                autoComplete="cc-number"
+                style={{ ...cardInputStyle, letterSpacing: '0.05em' }}
+              />
+              {errors.number && <span className="field-error">{errors.number}</span>}
+            </label>
+
+            <div className="form-row" style={{ marginBottom: 0 }}>
+              <label className="profile-field">
+                <span className="profile-field-label">Expiry (MM/YY)</span>
+                <input
+                  type="text"
+                  value={card.expiry}
+                  onChange={handleCardChange('expiry')}
+                  placeholder="08/29"
+                  inputMode="numeric"
+                  autoComplete="cc-exp"
+                  style={cardInputStyle}
+                />
+                {errors.expiry && <span className="field-error">{errors.expiry}</span>}
+              </label>
+
+              <label className="profile-field">
+                <span className="profile-field-label">CVV</span>
+                <input
+                  type="text"
+                  value={card.cvv}
+                  onChange={handleCardChange('cvv')}
+                  placeholder="123"
+                  inputMode="numeric"
+                  autoComplete="cc-csc"
+                  style={cardInputStyle}
+                />
+                {errors.cvv && <span className="field-error">{errors.cvv}</span>}
+              </label>
+            </div>
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                onClick={() => setStep('duration')}
+                disabled={processing}
+                className="btn-ghost"
+              >
+                Back
+              </button>
+              <button
+                type="submit"
+                disabled={processing}
+                className="btn-orange"
+              >
+                {processing ? 'Processing…' : `Pay €${total}`}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {step === 'success' && (
+          <div style={{ textAlign: 'center', padding: '0.5rem 0 0.8rem' }}>
+            <div
+              style={{
+                width: 64,
+                height: 64,
+                margin: '0.4rem auto 1rem',
+                borderRadius: '50%',
+                background: 'rgba(34,197,94,0.15)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#4ade80',
+                fontSize: '2rem',
+                fontWeight: 700,
+              }}
+            >
+              ✓
+            </div>
+            <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.2rem' }}>
+              Payment successful
+            </h3>
+            <p className="muted" style={{ margin: 0, lineHeight: 1.6 }}>
+              Your request is sent to your bank.
+              <br />
+              We'll send your coaching request to{' '}
+              <strong style={{ color: '#fff' }}>{trainerName}</strong>.
+            </p>
+
+            <div className="modal-actions" style={{ justifyContent: 'center' }}>
+              <button type="button" onClick={onPaid} className="btn-orange">
+                Done
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function luhnCheck(digits) {
+  let sum = 0;
+  let alt = false;
+  for (let i = digits.length - 1; i >= 0; i--) {
+    let n = Number(digits[i]);
+    if (alt) {
+      n *= 2;
+      if (n > 9) n -= 9;
+    }
+    sum += n;
+    alt = !alt;
+  }
+  return sum % 10 === 0;
+}
+
+const cardInputStyle = {
+  background: '#0a0a0a',
+  border: '1px solid #232323',
+  borderRadius: '10px',
+  padding: '0.65rem 0.85rem',
+  color: '#fff',
+  fontSize: '0.95rem',
+  fontFamily: 'inherit',
+  outline: 'none',
+};
 
 const Cell = ({ label, value }) => (
   <div className="summary-cell">

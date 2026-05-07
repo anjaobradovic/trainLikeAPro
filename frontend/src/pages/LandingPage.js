@@ -399,10 +399,18 @@ export default function LandingPage() {
         <div className="modal-overlay" onClick={handleSuccessClose}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-icon">✓</div>
-            <h2 className="modal-title">Congratulations!</h2>
-            <p className="modal-text">Your account has been created. You can log in now.</p>
+            <h2 className="modal-title">
+              {registerRole === 'trainer'
+                ? 'Application received'
+                : 'Congratulations!'}
+            </h2>
+            <p className="modal-text">
+              {registerRole === 'trainer'
+                ? 'Your trainer account is awaiting admin approval. You will be able to log in once an administrator reviews and approves your application.'
+                : 'Your account has been created. You can log in now.'}
+            </p>
             <button className="btn-primary" onClick={handleSuccessClose}>
-              Continue to Login
+              {registerRole === 'trainer' ? 'OK' : 'Continue to Login'}
             </button>
           </div>
         </div>

@@ -99,7 +99,7 @@ class RegisterTrainerSerializer(serializers.ModelSerializer):
         return attrs
 
     def _initial_status(self):
-        return TrainerProfile.Status.APPROVED
+        return TrainerProfile.Status.PENDING
 
     def create(self, validated_data):
         validated_data.pop('password2')
